@@ -266,6 +266,42 @@ async def blackjack(message: Message) -> None:
         await message.channel.send(str(bj_manager), view=bj_view)
 
 
+async def slots_pirots(message: Message) -> None:
+    async with message.channel.typing():
+        token_info: list[int] = bot_vars.user_interaction_tokens[message.author.id]
+
+        bet_str_list: list[str] = message.content.split(maxsplit=1)
+        if len(bet_str_list) < 2:
+            await message.channel.send(f":prohibited: Укажите ставку (у вас `{token_info[0]}` :coin:).")
+            return
+
+        bet_str: str = bet_str_list[1]
+        bet: int
+        if bet_str.isnumeric():
+            bet = int(bet_str)
+        elif bet_str == "all":
+            bet = token_info[0]
+        else:
+            await message.channel.send(f":prohibited: вы даун")
+            return
+
+        if bet < 1:
+            await message.channel.send(f":prohibited: вы даун")
+            return
+        if bet > token_info[0]:
+            await message.channel.send(f":prohibited: Недостаточно токенов (у вас `{token_info[0]}` :coin:).")
+            return
+
+        slots_view: slot.View_pirots = slot.View_pirots(
+            bet=bet,
+            userid=message.author.id,
+            token_info=token_info
+        )
+
+        msg: Message = await message.reply(str(slots_view), view=slots_view)
+        await slots_view.set_msg_and_spin(msg)
+
+
 async def slots(message: Message) -> None:
     async with message.channel.typing():
         token_info: list[int] = bot_vars.user_interaction_tokens[message.author.id]

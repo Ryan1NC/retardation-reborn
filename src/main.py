@@ -132,8 +132,11 @@ async def on_message(message: discord.Message):
         case ";blackjack" | ";bj":
             await commands.blackjack(message)
         
-        case ";slots" | ";slot":
+        case ";slots-legacy" | ";slot-legacy" | ";sl" | ";slots" | ";slots":
             await commands.slots(message)
+
+        case ";slots-pirots" | ";slot-pirots" | ";pirots" | ";pirot":
+            await commands.slots_pirots(message)
 
         case ";leaderboard" | ";leaderboards" | ";lb" | ";top":
             await commands.leaderboard(message)
