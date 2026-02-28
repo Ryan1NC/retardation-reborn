@@ -3,6 +3,7 @@ import discord
 import logging
 import logging.handlers
 from random import random
+import random as rnd
 
 from bot_variables import BotVariables
 import commands
@@ -32,12 +33,12 @@ ai.LOGGER = commands.LOGGER = tasks.LOGGER = LOGGER
 
 # Retrieve sensitive information from an unlisted file
 TOKEN: str
-AKASH_API_KEY: str
+OPENROUTER_API_KEY: str
 
 with open("tokens.txt", "r") as file:
     temp = file.read().splitlines()
     TOKEN = temp[0]
-    AKASH_API_KEY = temp[1]
+    OPENROUTER_API_KEY = temp[1]
 
 LOGGER.info("Read tokens from file")
 
@@ -66,7 +67,7 @@ except Exception as e:
     LOGGER.error(f"Exception while reading bot vars: {e}")
     bot_vars = BotVariables()
 
-bot_vars.ai_key = AKASH_API_KEY
+bot_vars.ai_key = OPENROUTER_API_KEY
 bot_vars.client = client
 
 commands.bot_vars = tasks.bot_vars = bot_vars
@@ -76,9 +77,7 @@ commands.bot_vars = tasks.bot_vars = bot_vars
 @client.event
 async def on_ready():
     LOGGER.info(f'We have logged in as {client.user}')
-    client.loop.create_task(tasks.hunger_task())
     client.loop.create_task(tasks.presence_task())
-    client.loop.create_task(tasks.update_shop_task())
     client.loop.create_task(tasks.save_on_disk_task())
     print("Bot is fully ready")
 
@@ -90,10 +89,7 @@ async def on_message(message: discord.Message):
 
     if message.author == client.user:
         return
-    
-    if bot_vars.health <= 0:
-        await commands.bot_death_notify(message)
-        return
+
 
     await commands.process_tokens_info(message)
 
@@ -121,31 +117,8 @@ async def on_message(message: discord.Message):
         case ";stop-writing-here" | ";stop":
             await commands.stop_writing_here(message)
 
-        case ";feed":
-            if bot_vars.upgrades.can_feed():
-                await commands.feed(message)
-        
-        case ";heal":
-            if bot_vars.upgrades.can_heal():
-                await commands.heal(message)
-        
-        case ";shop":
-            await commands.shop(message)
-        
-        case ";buy":
-            await commands.buy(message)
-
-        case ";clean-litter" | ";clean-litter-box" | ";clean" | ";cl":
-            await commands.clean_litter(message)
-
         case ";status":
             await commands.status(message)
-        
-        case ";do-tamagotchi" | ";tamagotchi":
-            await commands.do_tamagotchi(message)
-        
-        case ";do-automessage" | ";automessage" | ";automessaging" | "automsg":
-            await commands.do_automessage(message)
 
         case ";tokens" | ";tok" | ";token" | ";balance" | ";bal":
             await commands.tokens(message)
@@ -171,35 +144,48 @@ async def on_message(message: discord.Message):
         case ";coinflip" | ";cf":
             await message.reply(f":coin: {'Орёл' if random() >= 0.5 else 'Решка'}")
 
-        case ";dice" | ";die":
-            await message.reply(":game_die:")
-            
-        case ";summon-pig" | ";summon" | "вызвать":
-            if message.content.lower().startswith((";summon-pig", ";summon pig", "вызвать свинью")):  # This is so scuffed, I'm sorry
-                await commands.summon_pig(message)
-
         case ";ping":
             await message.channel.send('pong')
 
         case ";help":
             await commands.help(message)
         
-        case ";gm-1":
+        case ";hesoyam":
             if message.author.guild_permissions.administrator:
-                bot_vars.user_interaction_tokens[message.author.id][0] = 9999
-                await message.channel.send("george floyd negroid cyberg technology activated")
-        
-        case ";kill":
+                bot_vars.user_interaction_tokens[message.author.id][0] += 250000
+                await message.channel.send("CHEAT CODE ACTIVATED")
+
+        case ";kaching":
             if message.author.guild_permissions.administrator:
-                bot_vars.health = 0
+                bot_vars.user_interaction_tokens[message.author.id][0] += 1000
+                await message.channel.send("CHEAT CODE ACTIVATED")
+
+        case ";antihesoyam":
+            if message.author.guild_permissions.administrator:
+                if bot_vars.user_interaction_tokens[message.author.id][0] >= 50000:
+                    bot_vars.user_interaction_tokens[message.author.id][0] -= 50000
+                    await message.channel.send("CHEAT CODE ACTIVATED")
+                else:
+                    bot_vars.user_interaction_tokens[message.author.id][0] = 0
+                    await message.channel.send("CHEAT CODE ACTIVATED")
+
+        case ";birb":
+            await message.channel.send(rnd.choice(['High1', 'High2', 'High3', 'High4']))
+
+        case ";tax":
+            if bot_vars.user_interaction_tokens[message.author.id][0] > 0:
+                bot_vars.user_interaction_tokens[message.author.id][0] -= 100
+                await message.channel.send(f"Вы заплатили налог. Осталось {bot_vars.user_interaction_tokens[message.author.id][0]} :coin:")
+            else:
+                await message.channel.send("Вы слишком нищий для уплаты налога.")
+
+        case ";resurrect":
+            await message.channel.send("# П̶̡̮͈̹̻̣̰͓͔̂̎͐̈́͝р̵͉͙͚̟̝̞̬̋̎͜о̸̗̮̬̟̎̏͆̅͐̋̊͛̀̀̀̀̅̕͝в̴̢̳̗͔̀̌̍̋̔͒͊̅͌̚͠о̷͙̙̖̟̪̬̐̊̓͒͌͒̓͑͗̅͜͝д̶̨̛̱͕͕̩̜͓̬̏͊̎̈͐̅͗̇͌̓̆͋̐̕ͅи̸̛̳̖̙̼͖͚̙̩͚̥͙̪͊̀̐̓͗̾̃̔̎̔̚ͅт̶̢̳̫̹̙͌͐̌͗͘с̵̛̙̹͎͕̤̠̦̜͕͎̻͊͆̋̌͜͜я̸̛͈̰̘͎̟̪̰̟̒̌̀͛̅̉͛̀͗ ̶̡̳̱̤͎́͋̐̾̅̏͜р̵̧͇̏͝и̶̥̦̪̠͓͙̣̪́̈̿̈͂̓͘͜͝т̵̭̣̹̩̞͙͖͕͕̪̼̯̤̥͑͗̔́̄̆̔͜͝у̵̨͉̫̗̣̫̍̇̀̇̚͝а̵̭̹͉̳̙̭̩͆̏̈́̈́̑̔̈́̀͛̄л̸̨̲̙̻̟͔̦̍̉̈́̔̊̐̉͛̈͠͠")
+            await quit()
 
         case _:
             await commands.automessage(message)
 
-
-@client.event
-async def on_reaction_add(reaction: discord.Reaction, user: discord.User):
-    await commands.try_revive(reaction)
 
 
 # Run the bot

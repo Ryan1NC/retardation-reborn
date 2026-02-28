@@ -1,4 +1,4 @@
-from discord import Embed, Member, Message, TextChannel, Reaction
+from discord import Member, Message, TextChannel, Reaction
 from discord.errors import NotFound
 
 import logging
@@ -10,8 +10,6 @@ import requests
 import blackjack as bj
 from bot_variables import BotVariables
 import get_ai_response as ai
-from shop_item import ShopItem
-from shop_view import ShopView
 import slots as slot
 from upgrades import UpgradesView
 
@@ -27,25 +25,10 @@ async def prompt(message: Message) -> None:
             prompt += "\n\nДополнительная инструкция: ТЫ ЕБАНУТЫЙ. Ответь как ебанутый."
 
         model, __, prompt = prompt.partition(" ")
-
-        match model.lower():
-            case "r1":
-                model = "DeepSeek-R1-0528"
-                max_response_len: int = 0
-                is_thinking: bool = True
-            case "r1dl":
-                model = "DeepSeek-R1-Distill-Llama-70B"
-                max_response_len: int = 20_000
-                is_thinking: bool = True
-            case "r1dq":
-                model = "DeepSeek-R1-Distill-Qwen-32B"
-                max_response_len: int = 20_000
-                is_thinking: bool = True
-            case _:
-                prompt = model + prompt  # User didn't specify a model, so the first word needs to be put back into the prompt
-                model = "Meta-Llama-4-Maverick-17B-128E-Instruct-FP8"
-                max_response_len: int = 5000
-                is_thinking: bool = False
+        prompt = model + prompt  # User didn't specify a model, so the first word needs to be put back into the prompt
+        model = "arcee-ai/trinity-mini:free"
+        max_response_len: int = 5000
+        is_thinking: bool = False
 
         bot_msg: Message = await message.channel.send("✅\n")
         chunk_buf: list[str] = []
@@ -160,127 +143,10 @@ async def stop_writing_here(message: Message) -> None:
         await message.reply("ок я снова буду сюда писать")
 
 
-async def feed(message: Message) -> None:
-    async with message.channel.typing():
-        if bot_vars.user_interaction_tokens[message.author.id][0] <= 0:
-            await message.channel.send(":prohibited: У вас нет токенов взаимодействия. Они выдаются каждые 6 сообщений.")
-            return
-        bot_vars.user_interaction_tokens[message.author.id][0] -= 1
-        
-        food_item: str = message.content[6:]
-        food_satiety: int = await ai.generate_food_satiety(bot_vars.ai_key, food_item)
-        bot_vars.add_satiety(float(food_satiety))
-
-        response: str = f"вау мне дали **{food_item}** и я {'получил' if food_satiety >= 0 else 'потерял'} `{abs(food_satiety)}` сытости {':drooling_face::drooling_face:' if food_satiety >= 40 else ''}\n"
-        item: ShopItem = ShopItem(food_item, food_satiety, 0, 0, 0, 0, 0, 0)
-        response += await ai.generate_feeding_comment(bot_vars.ai_key, item, bot_vars, ai.CommentType.FEED)
-
-        await message.channel.send(response)
-
-
-async def heal(message: Message) -> None:
-    async with message.channel.typing():
-        if bot_vars.user_interaction_tokens[message.author.id][0] <= 0:
-            await message.channel.send(":prohibited: У вас нет токенов взаимодействия. Они выдаются каждые 6 сообщений.")
-            return
-        bot_vars.user_interaction_tokens[message.author.id][0] -= 1
-
-        item: str = message.content[6:]
-        item_health: int = await ai.generate_item_health(bot_vars.ai_key, item)
-        bot_vars.add_health(float(item_health))
-
-        response: str = f"меня подлечили с помощью **{item}** и я {'получил' if item_health >= 0 else 'нахуй потерял'} `{abs(item_health)}` здоровья {':heart:' if item_health >= 0 else ':broken_heart::broken_heart::broken_heart:'}\n"
-        item_obj: ShopItem = ShopItem(item, 0, item_health, 0, 0, 0, 0, 0)
-        response += await ai.generate_feeding_comment(bot_vars.ai_key, item_obj, bot_vars, ai.CommentType.HEAL)
-        
-        await message.channel.send(response)
-
-
-async def clean_litter(message: Message) -> None:
-    async with message.channel.typing():
-        if bot_vars.litter_box_fullness > 0:
-            bonus_tokens: int = bot_vars.litter_box_fullness // 10
-            bot_vars.litter_box_fullness = 0
-            bot_vars.user_interaction_tokens[message.author.id][0] += bonus_tokens
-            await message.channel.send(f"лоток очищен :white_check_mark:\nВы получили {bonus_tokens} 🪙")
-        else:   
-            await message.channel.send("лоток уже чист....")
-
-
-async def shop(message: Message) -> None:
-    async with message.channel.typing():
-        if not bot_vars.get_shop_items_str():
-            bot_vars.shop_items = await ai.generate_shop_items(bot_vars.ai_key)
-            
-        await message.channel.send(
-            content=bot_vars.get_shop_items_str(),
-            view=ShopView(bot_vars.shop_items)
-            )
-
-
-async def buy(message: Message) -> None:
-    async with message.channel.typing():
-        item_idx_str: str = message.content[5:]
-
-        if not item_idx_str.isnumeric():
-            await message.channel.send(":prohibited: вы даун")
-            return
-        
-        item_idx: int = int(item_idx_str) - 1
-        await buy_item(item_idx, message.channel, message.author.id)
-
-
-async def buy_item(
-        idx: int,
-        channel: TextChannel,
-        userid: int,
-        orig_shop_msg: Message | None = None,
-        shop_view: ShopView | None = None
-    ) -> bool:
-    """`orig_shop_msg` and `shop_view` are provided when this function is
-    called from a shop view. Returns if the item was bought successfully."""
-
-    async with channel.typing():
-        item: ShopItem = bot_vars.shop_items[idx]
-        
-        if item.is_bought:
-            await channel.send(f":prohibited: Эта вещь уже куплена, подождите обновления магазина.")
-            return item.is_bought
-        
-        if bot_vars.user_interaction_tokens[userid][0] < item.cost:
-            await channel.send(
-                ":prohibited: У вас недостаточно токенов взаимодействия (у вас " + 
-                f"`{bot_vars.user_interaction_tokens[userid][0]}`). Они выдаются каждые 6 сообщений."
-            )
-            return item.is_bought
-        
-        bot_vars.user_interaction_tokens[userid][0] -= item.cost
-        item.is_name_hidden = item.is_satiety_hidden = item.is_health_hidden = False
-        response: str = f"<@{userid}>, вы успешно купили {item}\n"
-        item.is_bought = True
-
-        bot_vars.add_health(item.health)
-        bot_vars.add_satiety(item.satiety)
-
-        response += await ai.generate_feeding_comment(bot_vars.ai_key, item, bot_vars, ai.CommentType.SHOP)
-        await channel.send(response)
-
-        if orig_shop_msg is not None and shop_view is not None:
-            await orig_shop_msg.edit(
-                content=bot_vars.get_shop_items_str(),
-                view=shop_view
-            )
-
-    return item.is_bought
-
 
 async def status(message: Message) -> None:
     async with message.channel.typing():
-        bot_status: str = f":heart: Здоровье: `{int(bot_vars.health)}`\n"
-        bot_status += f":meat_on_bone: Сытость: `{int(bot_vars.satiety)}`\n"
-        bot_status += f":poop: Наполненность лотка: `{bot_vars.litter_box_fullness}`\n"
-        bot_status += f":hourglass: Бот прожил: `{(int(time.time()) - bot_vars.CREATED_AT) // 3600}` часов\n\n"
-        bot_status += f":coin: Ваши токены взаимодействия: `{bot_vars.user_interaction_tokens[message.author.id][0]}`"
+        bot_status: str = f":coin: Ваши токены взаимодействия: `{bot_vars.user_interaction_tokens[message.author.id][0]}`"
 
         automsg_expansion: str | None = bot_vars.upgrades.get_automsg_expansion()
         if automsg_expansion is not None:
@@ -300,18 +166,8 @@ async def do_tamagotchi(message: Message) -> None:
         await message.reply(":white_check_mark: режим выживания выключен..... НАВСЕГДА.......")
 
 
-async def do_automessage(message: Message) -> None:
-    bot_vars.do_automessage = not bot_vars.do_automessage
-    if bot_vars.do_automessage:
-        await message.reply("Я СНОВА БУДУ ГОВОРИТь")
-    else:
-        await message.reply(":white_check_mark: прощайте..... НАВСЕГДА.......")
-
-
 async def tokens(message: Message) -> None:
     async with message.channel.typing():
-        bot_vars.user_interaction_tokens[message.author.id][0] = int(bot_vars.user_interaction_tokens[message.author.id][0])
-
         tok_str_list: list[str] = message.content.split(maxsplit=1)
 
         if len(tok_str_list) != 2:
@@ -411,38 +267,39 @@ async def blackjack(message: Message) -> None:
 
 
 async def slots(message: Message) -> None:
-    token_info: list[int] = bot_vars.user_interaction_tokens[message.author.id]
+    async with message.channel.typing():
+        token_info: list[int] = bot_vars.user_interaction_tokens[message.author.id]
 
-    bet_str_list: list[str] = message.content.split(maxsplit=1)
-    if len(bet_str_list) < 2:
-        await message.channel.send(f":prohibited: Укажите ставку (у вас `{token_info[0]}` :coin:).")
-        return
-    
-    bet_str: str = bet_str_list[1]
-    bet: int
-    if bet_str.isnumeric():
-        bet = int(bet_str)
-    elif bet_str == "all":
-        bet = token_info[0]
-    else:
-        await message.channel.send(f":prohibited: вы даун")
-        return
-    
-    if bet < 1:
-        await message.channel.send(f":prohibited: вы даун")
-        return
-    if bet > token_info[0]:
-        await message.channel.send(f":prohibited: Недостаточно токенов (у вас `{token_info[0]}` :coin:).")
-        return
+        bet_str_list: list[str] = message.content.split(maxsplit=1)
+        if len(bet_str_list) < 2:
+            await message.channel.send(f":prohibited: Укажите ставку (у вас `{token_info[0]}` :coin:).")
+            return
+        
+        bet_str: str = bet_str_list[1]
+        bet: int
+        if bet_str.isnumeric():
+            bet = int(bet_str)
+        elif bet_str == "all":
+            bet = token_info[0]
+        else:
+            await message.channel.send(f":prohibited: вы даун")
+            return
+        
+        if bet < 1:
+            await message.channel.send(f":prohibited: вы даун")
+            return
+        if bet > token_info[0]:
+            await message.channel.send(f":prohibited: Недостаточно токенов (у вас `{token_info[0]}` :coin:).")
+            return
 
-    slots_view: slot.View = slot.View(
-        bet=bet,
-        userid=message.author.id,
-        token_info=token_info
-    )
+        slots_view: slot.View = slot.View(
+            bet=bet,
+            userid=message.author.id,
+            token_info=token_info
+        )
 
-    msg: Message = await message.reply(str(slots_view), view=slots_view)
-    await slots_view.set_msg_and_spin(msg)
+        msg: Message = await message.reply(str(slots_view), view=slots_view)
+        await slots_view.set_msg_and_spin(msg)
 
 
 async def leaderboard(message: Message) -> None:
@@ -542,24 +399,6 @@ async def translate(message: Message) -> None:
                 LOGGER.error(f"Error while trying to translate a message ({message.content}): {response_json['error']}")
 
 
-async def summon_pig(message: Message) -> None:
-    async with message.channel.typing():
-        PIGS: list[str] = [
-            "https://media.discordapp.net/attachments/1364675345722380380/1364675453264334969/domestic-pig-vertebrate-mammal-suidae-pigs-ear-snout-nose-livestock-terrestrial-animal-grass-fawn-ear-1622281-414289180.jpg?ex=68131a4e&is=6811c8ce&hm=279c5fb84d77678704c9c690f72c72835221eee91b588f54adfb5299e4736be3&=&format=webp&width=1021&height=679",
-            "https://cdn.discordapp.com/attachments/305699301135351808/1367072336154464257/115621-Inga.jpg?ex=681340d3&is=6811ef53&hm=398de6f759e74e90c01da08e1fcf53605214d11270c9470ccb4ab54ac4a96836&",
-            "https://cdn.discordapp.com/attachments/305699301135351808/1367072510335651880/Domestic_pig_-_Miniature_Pig.jpg?ex=681340fd&is=6811ef7d&hm=67ded954f8c9fd42159ba36d63b19185e5786977ab68a274eea867953595749b&",
-            "https://cdn.discordapp.com/attachments/305699301135351808/1367072826976108554/49388993291_7f098f90fb_k-113260129.jpg?ex=68134148&is=6811efc8&hm=d234b7c683638cd508906aaaec4e671560457582d9b8afdc72fd040b89020659&",
-            "https://cdn.discordapp.com/attachments/305699301135351808/1367082428136685668/pig-fat-muzzle-funny-wallpaper.jpg?ex=68134a3a&is=6811f8ba&hm=3f7cf7a9f461ea8d139048e96899fa2094c9d232714b8d6ee1e338bcb3f7e2d7&",
-            "https://cdn.discordapp.com/attachments/305699301135351808/1367082519824039956/Red-Wattle-Hog-Facts1.jpg?ex=68134a4f&is=6811f8cf&hm=06354a736fedb904468a3b0335032e571b18ab82c783dd43e7e721d62d57d9b7&",
-            "https://cdn.discordapp.com/attachments/1134466669260050474/1260892645744578640/Untitled.png?ex=683acdc8&is=68397c48&hm=8bf64924d80b7d77310531dde4a85e9cac1ecc526ea4d7946a9ba2eba42d2466&"
-        ]
-
-        pig: str = random.choice(PIGS)
-        pig_embed: Embed = Embed(type="image", description="✅ свинья вызвана").set_image(url=pig)
-
-        await message.channel.send(embed=pig_embed)
-
-
 async def help(message: Message) -> None:
     help_msg: str = "## 🤖 Общение с ботом 🤖\n"
     help_msg += "- `;set-message-interval [Интервал: int | \"random\"]` - поставить количество пользовательских сообщений, после которых бот сам что-то напишет.\n"
@@ -573,20 +412,17 @@ async def help(message: Message) -> None:
     help_msg += "- `;leaderboard (;top, ;lb)` - Показать топ сервера по токенам.\n"
     help_msg += "- `;upgrade (;upgrades)` - Открывает меню апгрейдов.\n"
     help_msg += "- `;blackjack (;bj) [Ставка: int | \"all\"]` - Сыграть в блэкджек.\n"
-    help_msg += "## 🧼 Уход за ботом 🧼\n"
+    help_msg += "- `;tax` - Заплатить налог. \n"
+    help_msg += "## 🧼 Уход за ботом был убран по понятным причинам.🧼\n"
     help_msg += "- `;status` - Показывает состояние бота и количество ваших токенов.\n"
-    help_msg += "- `;shop` - Показывает магазин. Магазин обновляется каждый час.\n"
-    help_msg += "- `;buy [Номер: int]` - Покупает вещь из магазина и даёт её боту.\n"
-    help_msg += "- `;feed [Еда: str]` - Кормит бота тем, что вы укажете в команде. Для использования необходим апгрейд. Тратит 1 токен при использовании.\n"
-    help_msg += "- `;heal [Лекарство: str]` - Лечит бота тем, что вы укажете в команде. Для использования необходим апгрейд. Тратит 1 токен при использовании.\n"
-    help_msg += "- `;clean-litter (;clean, ;cl)` - Очищает лоток бота.\n"
     help_msg += "## 🔧 Утилиты 🔧\n"
-    help_msg += "- `;prompt [Сообщение: str]` - обратиться к Llama 3.1 405B.\n"
+    help_msg += "- `;prompt [Сообщение: str]` - обратиться к Arcee Trinity Mini.\n"
     help_msg += "- `;translate (;tl) [Языки: str, Сообщение: str]` - перевести текст. Языки перевода должны иметь следующий вид: `{ЯзыкОригинала}2{ЯзыкПеревода}` (прим. "
     help_msg += "`;tl en2ru text text` переведёт указанный английский текст на русский язык). Можно оставить язык оригинала пустым для его автоматического определения "
     help_msg += "(прим. `;tl 2ru text text`). Можно ответить на чужое сообщение, чтобы перевести его (прим. `;tl 2zh` переведёт чужое сообщение на китайский).\n"
     help_msg += "- `;coinflip (;cf)` - подбросить монетку.\n"
     help_msg += "- `;ping` - pong.\n"
+    help_msg += "- `;resurrect` - Убить инвалида. Некромантия его воскресит и он отвиснет. \n"
 
     await message.channel.send(help_msg)
 
@@ -617,26 +453,16 @@ async def process_tokens_info(message: Message) -> None:
 
 
 async def automessage(message: Message) -> None:
-    if not bot_vars.do_automessage:
-        return
-
     if message.channel.id in bot_vars.banned_automsg_channels:
         return
 
     bot_vars.recent_messages.append(message)
 
-    is_mentioned_by_name: bool = bot_vars.client.user in message.mentions
-
-    is_mentioned_by_role: bool = False
-    for bot_role in message.guild.get_member(bot_vars.client.user.id).roles:
-        if bot_role in message.role_mentions:
-            is_mentioned_by_role = True
+    is_mentioned: bool = bot_vars.client.user in message.mentions
 
     regex_match = re.search(r"(?:\s|^)инвалид", message.content.lower())
     is_mentioned_directly: bool = regex_match is not None
     
-    is_mentioned: bool = is_mentioned_by_name or is_mentioned_by_role or is_mentioned_directly
-
     is_time_to_automessage: bool
 
     if bot_vars.setting_message_interval_is_random:
@@ -649,7 +475,7 @@ async def automessage(message: Message) -> None:
         recent_messages_len: int = len(bot_vars.recent_messages)
         is_time_to_automessage = recent_messages_len >= bot_vars.setting_message_interval
 
-    automessage_condition: bool = is_mentioned or is_time_to_automessage
+    automessage_condition: bool = is_mentioned or is_mentioned_directly or is_time_to_automessage
     if automessage_condition and bot_vars.recent_messages:
         async with message.channel.typing():
             automessage: str = await ai.generate_automessage(bot_vars.ai_key, bot_vars)
@@ -666,32 +492,3 @@ async def check_if_waiting_for_message(message: Message) -> None:
     if bot_vars.upgrades.is_automsg_expansion_being_bought_by_user(message.author.id):
         bot_vars.upgrades.set_automsg_expansion(message.content)
         await message.reply(":white_check_mark: Текст запроса сообщений успешно обновлён.")
-
-
-async def bot_death_notify(message: Message) -> None:
-    if not bot_vars.time_of_death:
-        bot_vars.time_of_death = int(time.time())
-
-    cant_revive_time: int = bot_vars.time_of_death + 3600
-
-    await message.channel.send(
-        "сука я сдох поставь пять чтобы я ВОСКРЕС\n" + 
-        f"меня можно{' было' if time.time() > cant_revive_time else ''}" +
-        f" воскресить без потери токенов до <t:{cant_revive_time}:f>"
-        )
-
-
-async def try_revive(reaction: Reaction) -> None:
-    is_dead: bool = bot_vars.health <= 0
-    is_reaction_to_bots_message: bool = reaction.message.author.id == bot_vars.client.user.id
-    is_correct_emoji: bool = reaction.emoji == "5️⃣"
-
-    if is_dead and is_reaction_to_bots_message and is_correct_emoji:
-        if not bot_vars.time_of_death:
-            bot_vars.time_of_death = int(time.time())
-
-        can_rehabilitate: bool = int(time.time()) < (bot_vars.time_of_death + 3600)
-        bot_vars.revive(can_rehabilitate)
-
-        LOGGER.info(f"Bot is revived{' without losing tokens' if can_rehabilitate else ', all progress lost'}")
-        await reaction.message.channel.send(f"Я ВОСКРЕС{'' if can_rehabilitate else '. Весь прогресс был обнулён.'}")

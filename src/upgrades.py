@@ -113,18 +113,6 @@ class _U_CustomAutomessage(_U_Fubar):
 
 
 _ALL_UPGRADES: list[_Upgrade] = [
-    _Upgrade(
-        u_id=0,
-        name="🍗 ;feed",
-        desc="Разблокирует команду `;feed` для всего сервера, с помощью которой можно кормить бота пользовательской едой.",
-        cost=50
-    ),
-    _Upgrade(
-        u_id=1,
-        name="🩷 ;heal",
-        desc="Разблокирует команду `;heal` для всего сервера, с помощью которой можно лечить бота пользовательскими лекарствами.",
-        cost=50
-    ),
     _U_AfkTokens(
         u_id=2,
         name="⌛ +1 час АФК токенов",
@@ -156,14 +144,10 @@ class Upgrades:
     @classmethod
     def reinstantiate(
             cls,
-            is_feed_bought: bool,
-            is_heal_bought: bool,
             afk_token_levels: dict[int, int]
         ) -> "Upgrades":
         upgrades: Upgrades = cls()
-        upgrades.upgrades[0].is_owned = is_feed_bought
-        upgrades.upgrades[1].is_owned = is_heal_bought
-        upgrades.upgrades[2].levels = afk_token_levels
+        upgrades.upgrades[0].levels = afk_token_levels
         return upgrades
     
     def to_str(self, userid: int) -> str:
@@ -171,31 +155,25 @@ class Upgrades:
         for upgrade in self.upgrades:
             s += f"- {upgrade.to_str(userid)}\n"
         return s
-
-    def can_feed(self) -> bool:
-        return self.upgrades[0].is_owned
-    
-    def can_heal(self) -> bool:
-        return self.upgrades[1].is_owned
     
     def get_max_afk_hours(self, userid: int) -> int:
-        afk_tok_upgrade: _U_AfkTokens = self.upgrades[2]
+        afk_tok_upgrade: _U_AfkTokens = self.upgrades[0]
         return afk_tok_upgrade.get_level(userid) + afk_tok_upgrade.DEFAULT_VAL
     
     def is_fubar(self) -> bool:
-        fubar_upgrade: _U_Fubar = self.upgrades[3]
+        fubar_upgrade: _U_Fubar = self.upgrades[1]
         return fubar_upgrade.check_expiration()
     
     def is_automsg_expansion_being_bought_by_user(self, userid: int) -> bool:
-        automsg_upgrade: _U_CustomAutomessage = self.upgrades[4]
+        automsg_upgrade: _U_CustomAutomessage = self.upgrades[2]
         return automsg_upgrade.is_being_bought and (automsg_upgrade.buyer_id == userid)
     
     def set_automsg_expansion(self, expansion_text: str) -> None:
-        automsg_upgrade: _U_CustomAutomessage = self.upgrades[4]
+        automsg_upgrade: _U_CustomAutomessage = self.upgrades[2]
         automsg_upgrade.finish_buying(expansion_text)
 
     def get_automsg_expansion(self) -> str | None:
-        automsg_upgrade: _U_CustomAutomessage = self.upgrades[4]
+        automsg_upgrade: _U_CustomAutomessage = self.upgrades[2]
         return automsg_upgrade.expansion_text if automsg_upgrade.check_expiration() else None
 
 
