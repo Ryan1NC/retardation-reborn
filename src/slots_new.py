@@ -12,13 +12,15 @@ _REEL_EMOJIS: tuple = (
     ":star:", ":egg:", "<a:slots:1477624553428488304>"
 )
 
-_PIROTS_WEIGHTS_NEW: tuple = (23, 24, 26, 27, 3, 2, 1)
+_PIROTS_WEIGHTS_NEW: tuple = (46, 48, 52, 54, 4, 2, 1, 2, 2, 1)
 
 _PIROTS_NEW_EMOJIS: tuple = (
     "<:High1:1410726957259161793>", "<:High2:1408765844296826990>", "<:High3:1410726975454056488>", "<:High4:1410726991644065842>", ":red_circle:",
     ":purple_circle:", ":green_circle:", ":blue_circle:", ":red_circle:",
     ":purple_circle:", ":green_circle:", ":blue_circle:", ":black_large_square:", ":one:", ":two:", ":three:",
-    ":one:", ":two:", ":three:"
+    ":one:", ":two:", ":three:",
+    ":negative_squared_cross_mark:", ":sparkle:", ":eight_spoked_asterisk:",
+    ":negative_squared_cross_mark:", ":sparkle:", ":eight_spoked_asterisk:"
 )
 
 class _Reel(Enum):
@@ -71,6 +73,14 @@ class _Pirots_NEW(Enum):
     UPGRADE_LV_1_CLAIMED = 17
     UPGRADE_LV_2_CLAIMED = 18
     UPGRADE_LV_3_CLAIMED = 19
+    #Универсальные апгрейды
+    UN_UPGRADE_LV_1 = 20
+    UN_UPGRADE_LV_2 = 21
+    UN_UPGRADE_LV_3 = 22
+    #Съеденные универсальные апгрейды
+    UN_UPGRADE_LV_1_CLAIMED = 23
+    UN_UPGRADE_LV_2_CLAIMED = 24
+    UN_UPGRADE_LV_3_CLAIMED = 25
 
     def to_emoji(self) -> str:
         """Возвращает визуальный символ."""
@@ -80,15 +90,16 @@ class _Pirots_NEW(Enum):
     def get_random_gem(cls) -> "_Pirots_NEW":
         """Случайный выбор самоцвета с заданными шансами."""
         return cls(random.sample(
-            population=[5, 6, 7, 8, 14, 15, 16],
+            population=[5, 6, 7, 8, 14, 15, 16, 20, 21, 22],
             k=1,
-            counts=[23, 24, 26, 27, 3, 2, 1]
+            counts=[138, 144, 156, 162, 6, 5, 4, 4, 2, 1]
         )[0])
 
     @classmethod
     def get_random_board(cls) -> list[list["_Pirots_NEW"]]:
         random_gems = random.choices(
-            population=[cls.RED_GEM, cls.PURPLE_GEM, cls.GREEN_GEM, cls.BLUE_GEM, cls.UPGRADE_LV_1, cls.UPGRADE_LV_2, cls.UPGRADE_LV_3],
+            population=[cls.RED_GEM, cls.PURPLE_GEM, cls.GREEN_GEM, cls.BLUE_GEM, cls.UPGRADE_LV_1, cls.UPGRADE_LV_2,
+                        cls.UPGRADE_LV_3, cls.UN_UPGRADE_LV_1, cls.UN_UPGRADE_LV_2, cls.UN_UPGRADE_LV_3],
             weights=_PIROTS_WEIGHTS_NEW,
             k=36
         )
@@ -216,7 +227,10 @@ class View_pirots(discord.ui.View):
                         _Pirots_NEW(cell.value + 4),
                         _Pirots_NEW(14),
                         _Pirots_NEW(15),
-                        _Pirots_NEW(16)
+                        _Pirots_NEW(16),
+                        _Pirots_NEW(20),
+                        _Pirots_NEW(21),
+                        _Pirots_NEW(22)
                     ]
 
                     cluster: list[tuple[int, int]] = self.pirots_map_gem_cluster(
@@ -234,7 +248,10 @@ class View_pirots(discord.ui.View):
                         # проверяем на множитель
                         if target_cell in (_Pirots_NEW.UPGRADE_LV_1_CLAIMED,
                                            _Pirots_NEW.UPGRADE_LV_2_CLAIMED,
-                                           _Pirots_NEW.UPGRADE_LV_3_CLAIMED):
+                                           _Pirots_NEW.UPGRADE_LV_3_CLAIMED,
+                                           _Pirots_NEW.UN_UPGRADE_LV_1_CLAIMED,
+                                           _Pirots_NEW.UN_UPGRADE_LV_2_CLAIMED,
+                                           _Pirots_NEW.UN_UPGRADE_LV_3_CLAIMED):
                             # начисляем множитель, но не затираем апгрейд
                             match cell:
                                 case _Pirots_NEW.RED_BIRD:
@@ -265,6 +282,34 @@ class View_pirots(discord.ui.View):
                                         self.blue_lvl += 2
                                     elif target_cell == _Pirots_NEW.UPGRADE_LV_3_CLAIMED:
                                         self.blue_lvl += 3
+
+                            #универсальные апгрейды:
+                            if target_cell == _Pirots_NEW.UN_UPGRADE_LV_1_CLAIMED:
+                                self.red_lvl += 1
+                                self.purple_lvl += 1
+                                self.green_lvl += 1
+                                self.blue_lvl += 1
+                            elif target_cell == _Pirots_NEW.UN_UPGRADE_LV_2_CLAIMED:
+                                self.red_lvl += 2
+                                self.purple_lvl += 2
+                                self.green_lvl += 2
+                                self.blue_lvl += 2
+                            elif target_cell == _Pirots_NEW.UN_UPGRADE_LV_3_CLAIMED:
+                                self.red_lvl += 3
+                                self.purple_lvl += 3
+                                self.green_lvl += 3
+                                self.blue_lvl += 3
+
+                            # проверки, не зашёл ли икс за лимит в 7
+                            if self.red_lvl > 7:
+                                self.red_lvl = 7
+                            if self.purple_lvl > 7:
+                                self.purple_lvl = 7
+                            if self.green_lvl > 7:
+                                self.green_lvl = 7
+                            if self.blue_lvl > 7:
+                                self.blue_lvl = 7
+
                             # очистка клетки после срабатывания
                             self.pirots_reels[gem_r][gem_c] = cell
                             self.pirots_reels[prev_r][prev_c] = _Pirots_NEW.EMPTY
@@ -339,7 +384,7 @@ class View_pirots(discord.ui.View):
                     # Если это обычный самоцвет (5–8), делаем его “CLAIMED” (+4)
                     if 5 <= cell.value <= 8:
                         self.pirots_reels[nr][nc] = _Pirots_NEW(cell.value + 4) #сдвиг на +4 до claimed
-                    elif 14 <= cell.value <= 16:
+                    elif 14 <= cell.value <= 16 or 20 <= cell.value <= 22:
                         # Для бонусных
                         self.pirots_reels[nr][nc] = _Pirots_NEW(cell.value + 3) #сдвиг на +3 до claimed
 
