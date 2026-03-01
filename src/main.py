@@ -10,6 +10,8 @@ import commands
 import get_ai_response as ai
 import tasks
 
+from numpy.random import choice
+
 
 # Declare logger
 LOGGER = logging.getLogger("invalid")
@@ -173,7 +175,9 @@ async def on_message(message: discord.Message):
                     await message.channel.send("CHEAT CODE ACTIVATED")
 
         case ";birb":
-            await message.channel.send(rnd.choice(['High1', 'High2', 'High3', 'High4']))
+            await message.channel.send(choice(['<:High1:1410726957259161793>', '<:High2:1408765844296826990>', \
+                                              '<:High3:1410726975454056488>', '<:High4:1410726991644065842>', \
+                                               '<:Pride:1380228659658493972> '], 1, p = [0.2475, 0.2475, 0.2475, 0.2475, 0.01])[0])
 
         case ";tax":
             if bot_vars.user_interaction_tokens[message.author.id][0] > 0:

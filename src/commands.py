@@ -11,6 +11,7 @@ import blackjack as bj
 from bot_variables import BotVariables
 import get_ai_response as ai
 import slots as slot
+import slots_new as slot2
 from upgrades import UpgradesView
 
 
@@ -158,13 +159,6 @@ async def status(message: Message) -> None:
         await message.channel.send(bot_status)
 
 
-async def do_tamagotchi(message: Message) -> None:
-    bot_vars.do_tamagotchi = not bot_vars.do_tamagotchi
-    if bot_vars.do_tamagotchi:
-        await message.reply(":white_check_mark: :white_check_mark: режим выживания вновь включён")
-    else:
-        await message.reply(":white_check_mark: режим выживания выключен..... НАВСЕГДА.......")
-
 
 async def tokens(message: Message) -> None:
     async with message.channel.typing():
@@ -292,7 +286,7 @@ async def slots_pirots(message: Message) -> None:
             await message.channel.send(f":prohibited: Недостаточно токенов (у вас `{token_info[0]}` :coin:).")
             return
 
-        slots_view: slot.View_pirots = slot.View_pirots(
+        slots_view: slot2.View_pirots = slot2.View_pirots(
             bet=bet,
             userid=message.author.id,
             token_info=token_info

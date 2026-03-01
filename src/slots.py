@@ -7,19 +7,13 @@ _REEL_EMOJIS: tuple = (
     ":skull:", "<:proverka:1307010119824965723>", ":cherries:", ":mushroom:",
     "<:gragas:1336062411970580511>", "<:esq_gragas:1336062410041196646>",
     "<:bulborb:1336061550498287616>", "<:nuclear_bulborb:1336061387847372830>",
-    ":star:", ":egg:", "<a:slots:1336120636635873390>"
+    ":star:", ":egg:", "<a:slots:1477624553428488304>"
 )
 
 _BIRD_EMOJIS: tuple = (
     ":bird:", ":black_bird:", ":baby_chick:", ":red_square:",
     ":white_square_button:", ":yellow_square:", ":red_square:",
     ":white_square_button:", ":yellow_square:", ":black_large_square:"
-)
-
-_PIROTS_NEW_EMOJIS: tuple = (
-    ":bird:", ":black_bird:", ":baby_chick:", ":parrot:", ":red_square:",
-    ":white_square_button:", ":yellow_square:", ":green_square:", ":red_square:",
-    ":white_square_button:", ":yellow_square:", ":green_square:", ":black_large_square:"
 )
 
 
@@ -71,32 +65,6 @@ class _Pirots(Enum):
             counts=[27, 33, 30]
         )[0])
 
-
-class _Pirots_NEW(Enum):
-    RED_BIRD = 1
-    BLACK_BIRD = 2
-    YELLOW_BIRD = 3
-    GREEN_BIRD = 4
-    RED_GEM = 5
-    BLACK_GEM = 6
-    YELLOW_GEM = 7
-    GREEN_GEM = 8
-    RED_GEM_CLAIMED = 9
-    BLACK_GEM_CLAIMED = 10
-    YELLOW_GEM_CLAIMED = 11
-    GREEN_GEM_CLAIMED = 12
-    EMPTY = 13
-
-    def to_emoji(self) -> str:
-        return _PIROTS_NEW_EMOJIS[self.value - 1]
-
-    @classmethod
-    def get_random_gem(cls) -> "_Pirots_NEW":
-        return cls(random.sample(
-            population=[5, 6, 7, 8],
-            k=1,
-            counts=[23, 24, 26, 27]
-        )[0])
 
 class View(discord.ui.View):
     bet: int
@@ -426,210 +394,6 @@ class View(discord.ui.View):
             self.stop()
 
             new_view: View = View(self.bet, self.player_userid, self.player_token_info)
-            msg: discord.Message = await self.msg.channel.send(str(new_view), view=new_view)
-            await new_view.set_msg_and_spin(msg)
-        else:
-            btn.disabled = True
-            await interaction.response.send_message(":prohibited: Недостаточно токенов!", ephemeral=True)
-            self.stop()
-
-class View_pirots(discord.ui.View):
-    bet: int
-    player_userid: int
-    player_token_info: list[int]
-    msg: discord.Message
-
-    reels: list[list[_Pirots_NEW]] # 5x5
-    def __init__(self, bet: int, userid: int, token_info: list[int], rows: int = 6, cols: int = 6):
-        super().__init__(timeout=30)
-        self.bet = bet
-        self.player_userid: int = userid
-        self.player_token_info = token_info
-
-        self.pirots_reels = [[_Reel.SPINNING for _ in range(cols)] for _ in range(rows)]
-
-        self.winnings = 0.0
-        self.pirots_winnings = 0.0
-        self.total_winnings = 0.0
-
-        self.is_bonus = False
-        self.is_coin_game = False
-
-        self.saved_bonus_spins = 0
-        self.saved_bonus_winnings = 0.0
-
-        self.player_token_info[0] -= self.bet
-
-    def __str__(self) -> str:
-        s: str = f"<@{self.player_userid}> | :coin: Ставка: `{self.bet}`\n\n"
-        for row in self.pirots_reels:
-            s += "> " + "".join(cell.to_emoji() for cell in row) + "\n"
-
-        winnings = max(self.winnings, self.total_winnings)
-        s += f"\n**Навар: +{int(winnings)} :coin:**"
-        return s
-
-    def to_emoji(self) -> str:
-        return _PIROTS_NEW_EMOJIS[self.value - 1]
-
-    async def pirots_reset_board(self) -> None:
-        n_rows = len(self.pirots_reels)
-        n_cols = len(self.pirots_reels[0])
-        # Generate the board
-        new_board = [[_Pirots_NEW.EMPTY for _ in range(n_cols)] for _ in range(n_rows)]
-
-        positions = [(r, c) for r in range(n_rows) for c in range(n_cols)]
-        random.shuffle(positions)
-
-        new_board[positions[0][0]][positions[0][1]] = _Pirots_NEW.RED_BIRD
-        new_board[positions[1][0]][positions[1][1]] = _Pirots_NEW.BLACK_BIRD
-        new_board[positions[2][0]][positions[2][1]] = _Pirots_NEW.YELLOW_BIRD
-        new_board[positions[3][0]][positions[3][1]] = _Pirots_NEW.GREEN_BIRD
-
-        # fill gems
-        for r in range(n_rows):
-            for c in range(n_cols):
-                if new_board[r][c] is _Pirots_NEW.EMPTY:
-                    new_board[r][c] = _Pirots_NEW.get_random_gem()
-
-        # Reveal the board with animation: сначала чистое поле, затем по столбцам
-        self.pirots_reels = [[_Pirots_NEW.EMPTY for _ in range(n_cols)] for _ in range(n_rows)]
-        for c in range(n_cols):
-            await self.msg.edit(content=str(self), view=self)
-            await asyncio.sleep(0.35)
-            for r in range(n_rows):
-                self.pirots_reels[r][c] = new_board[r][c]
-
-    async def pirots_move_birds(self) -> None:
-        moved: bool = False
-        n_rows = len(self.pirots_reels)
-        n_cols = len(self.pirots_reels[0])
-
-        for c in range(n_cols):
-            for r in range(n_rows):
-                cell: _Pirots_NEW = self.pirots_reels[r][c]
-                if cell in [_Pirots_NEW.RED_BIRD, _Pirots_NEW.BLACK_BIRD, _Pirots_NEW.YELLOW_BIRD, _Pirots_NEW.GREEN_BIRD]:
-                    cluster: list[tuple[int, int]] = self.pirots_map_gem_cluster(
-                        target_gem=_Pirots_NEW(cell.value + 4),
-                        bird_position=(r, c),
-                        cluster=list()
-                    )
-
-                    for i in range(1, len(cluster)):
-                        gem_r, gem_c = cluster[i]
-                        self.pirots_reels[gem_r][gem_c] = cell
-                        prev_r, prev_c = cluster[i - 1]
-                        self.pirots_reels[prev_r][prev_c] = _Pirots_NEW.EMPTY
-
-                        self.total_winnings += self.bet * 0.1
-                        self.pirots_winnings += self.bet * 0.1
-                        moved = True
-
-                        await self.msg.edit(content=str(self), view=self)
-                        await asyncio.sleep(0.2)
-
-        if moved:
-            self.pirots_move_empty_cells_up()
-            await self.msg.edit(content=str(self), view=self)
-            await asyncio.sleep(0.25)
-
-            self.pirots_fill_empty_cells()
-            await self.msg.edit(content=str(self), view=self)
-            await asyncio.sleep(0.25)
-
-            await self.pirots_move_birds()
-
-    def pirots_map_gem_cluster(
-            self,
-            target_gem: _Pirots_NEW,
-            bird_position: tuple[int, int],
-            cluster: list[tuple[int, int]]
-    ) -> list[tuple[int, int]]:
-        if len(cluster) == 0:
-            cluster.append(bird_position)
-
-        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
-        n_rows = len(self.pirots_reels)
-        n_cols = len(self.pirots_reels[0])
-
-        r0, c0 = bird_position
-        for dr, dc in directions:
-            nr = r0 + dr
-            nc = c0 + dc
-
-            if 0 <= nr < n_rows and 0 <= nc < n_cols and self.pirots_reels[nr][nc] == target_gem:
-                cluster.append((nr, nc))
-                self.pirots_reels[nr][nc] = _Pirots_NEW(target_gem.value + 4)
-                self.pirots_map_gem_cluster(target_gem, (nr, nc), cluster)
-
-        return cluster
-
-    def pirots_move_empty_cells_up(self) -> None:
-        n_rows = len(self.pirots_reels)
-        n_cols = len(self.pirots_reels[0])
-
-        for c in range(n_cols):
-            free_cells: list[int] = []
-            for r in range(n_rows - 1, -1, -1):
-                if self.pirots_reels[r][c] == _Pirots_NEW.EMPTY:
-                    free_cells.append(r)
-                elif free_cells:
-                    target_r = free_cells.pop(0)  # самый нижний свободный
-                    self.pirots_reels[target_r][c] = self.pirots_reels[r][c]
-                    self.pirots_reels[r][c] = _Pirots_NEW.EMPTY
-                    free_cells.append(r)
-
-    def pirots_fill_empty_cells(self) -> None:
-        n_rows = len(self.pirots_reels)
-        n_cols = len(self.pirots_reels[0])
-        for r in range(n_rows):
-            for c in range(n_cols):
-                if self.pirots_reels[r][c] == _Pirots_NEW.EMPTY:
-                    self.pirots_reels[r][c] = _Pirots_NEW.get_random_gem()
-
-    async def set_msg_and_spin(self, msg: discord.Message) -> None:
-        self.msg = msg
-        await self.spin()
-
-    async def spin(self) -> None:
-        self.player_token_info[0] += int(self.pirots_winnings)
-        ''' legacy код, не обращай внимания
-        if self.saved_bonus_spins > 0:
-            self.is_bonus = True
-            self.bonus_spins = self.saved_bonus_spins
-            self.total_winnings += self.saved_bonus_winnings
-            self.saved_bonus_spins = 0
-            self.saved_bonus_winnings = 0.0
-
-            self.reels = [_Reel.SPINNING, _Reel.SPINNING, _Reel.SPINNING]
-            await self.msg.edit(content=str(self), view=self)
-            await asyncio.sleep(1)
-            await self.spin(0)
-
-            return
-        '''
-        await self.pirots_reset_board()
-        await asyncio.sleep(0.5)
-        await self.pirots_move_birds()
-        await self.msg.edit(content=str(self), view=self)
-        if self.pirots_winnings > 0:
-            self.player_token_info[0] += int(self.pirots_winnings)
-            self.pirots_winnings = 0.0
-        #return await self.spin()
-
-
-    @discord.ui.button(label="Сыграть снова")
-    async def play_again_btn(self, interaction: discord.Interaction, btn: discord.ui.Button) -> None:
-        if interaction.user.id != self.player_userid:
-            await interaction.response.send_message("Не твоя игра сучк", ephemeral=True)
-        elif any(reel == _Reel.SPINNING for row in self.pirots_reels for reel in row):
-            await interaction.response.send_message("Подожди, пока слоты докрутятся", ephemeral=True)
-        elif self.player_token_info[0] >= self.bet:
-            btn.disabled = True
-            await interaction.response.defer()
-            self.stop()
-
-            new_view: View = View_pirots(self.bet, self.player_userid, self.player_token_info)
             msg: discord.Message = await self.msg.channel.send(str(new_view), view=new_view)
             await new_view.set_msg_and_spin(msg)
         else:
