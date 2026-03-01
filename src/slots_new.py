@@ -257,16 +257,12 @@ class View_pirots(discord.ui.View):
                             match cell:
                                 case _Pirots_NEW.RED_BIRD:
                                     self.pirots_winnings += self.bet * 0.1 * self.red_lvl
-                                    print('r')
                                 case _Pirots_NEW.PURPLE_BIRD:
                                     self.pirots_winnings += self.bet * 0.1 * self.purple_lvl
-                                    print('p')
                                 case _Pirots_NEW.GREEN_BIRD:
                                     self.pirots_winnings += self.bet * 0.05 * self.green_lvl
-                                    print('g')
                                 case _Pirots_NEW.BLUE_BIRD:
                                     self.pirots_winnings += self.bet * 0.05 * self.blue_lvl
-                                    print('b')
                         moved = True
 
                         await self.msg.edit(content=str(self), view=self)
