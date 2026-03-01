@@ -442,6 +442,8 @@ async def help(message: Message) -> None:
     help_msg += "- `;leaderboard (;top, ;lb)` - Показать топ сервера по токенам.\n"
     help_msg += "- `;upgrade (;upgrades)` - Открывает меню апгрейдов.\n"
     help_msg += "- `;blackjack (;bj) [Ставка: int | \"all\"]` - Сыграть в блэкджек.\n"
+    help_msg += "- `;slots-legacy (;slot-legacy ;sl ;slots ;slot) [Ставка: int | \"all\"]` - Сыграть в старые слоты.\n"
+    help_msg += "- `;slots-pirots (;slot-pirots ;sp ;pirots ;pirot) [Ставка: int | \"all\"]` - Сыграть в альфа-версию птичек.\n"
     help_msg += "- `;tax` - Заплатить налог. \n"
     help_msg += "## 🧼 Уход за ботом был убран по понятным причинам.🧼\n"
     help_msg += "- `;status` - Показывает состояние бота и количество ваших токенов.\n"
@@ -453,6 +455,7 @@ async def help(message: Message) -> None:
     help_msg += "- `;coinflip (;cf)` - подбросить монетку.\n"
     help_msg += "- `;ping` - pong.\n"
     help_msg += "- `;resurrect` - Убить инвалида. Некромантия его воскресит и он отвиснет. \n"
+    help_msg += "- `;birb` - Вызвать птичку. \n"
 
     await message.channel.send(help_msg)
 
