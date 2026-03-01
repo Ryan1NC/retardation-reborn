@@ -16,6 +16,7 @@ _BIRD_EMOJIS: tuple = (
     ":white_square_button:", ":yellow_square:", ":black_large_square:"
 )
 
+_PIROTS_WEIGHTS: tuple = (27, 30, 33, 9, 2, 7)
 
 class _Reel(Enum):
     SKULL = 1
@@ -40,6 +41,25 @@ class _Reel(Enum):
             k=1,
             counts=[17, 33, 10, 10, 15, 9, 5, 1, 37, 37]
         )[0])
+
+    @classmethod
+    def get_random_board(cls) -> list[list["_Pirots"]]:
+        random_gems = random.choices(
+            population=[cls.RED_GEM, cls.BLACK_GEM, cls.YELLOW_GEM, cls.STAR, cls.WING, cls.ROCK],
+            weights=_PIROTS_WEIGHTS,
+            k=25
+        )
+
+        random_board = [[random_gems[x * 5 + y] for x in range(5)] for y in range(5)]
+
+        birds_pos = [(x, y) for x in range(5) for y in range(5)]
+        random.shuffle(birds_pos)
+
+        random_board[birds_pos[0][0]][birds_pos[0][1]] = _Pirots.RED_BIRD
+        random_board[birds_pos[1][0]][birds_pos[1][1]] = _Pirots.BLACK_BIRD
+        random_board[birds_pos[2][0]][birds_pos[2][1]] = _Pirots.YELLOW_BIRD
+
+        return random_board
     
 
 class _Pirots(Enum):

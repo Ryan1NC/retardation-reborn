@@ -12,6 +12,8 @@ _REEL_EMOJIS: tuple = (
     ":star:", ":egg:", "<a:slots:1477624553428488304>"
 )
 
+_PIROTS_WEIGHTS_NEW: tuple = (23, 24, 26, 27, 3, 2, 1)
+
 _PIROTS_NEW_EMOJIS: tuple = (
     "<:High1:1410726957259161793>", "<:High2:1408765844296826990>", "<:High3:1410726975454056488>", "<:High4:1410726991644065842>", ":red_circle:",
     ":purple_circle:", ":green_circle:", ":blue_circle:", ":red_circle:",
@@ -83,6 +85,26 @@ class _Pirots_NEW(Enum):
             counts=[23, 24, 26, 27, 3, 2, 1]
         )[0])
 
+    @classmethod
+    def get_random_board(cls) -> list[list["_Pirots_NEW"]]:
+        random_gems = random.choices(
+            population=[cls.RED_GEM, cls.PURPLE_GEM, cls.GREEN_GEM, cls.BLUE_GEM, cls.UPGRADE_LV_1, cls.UPGRADE_LV_2, cls.UPGRADE_LV_3],
+            weights=_PIROTS_WEIGHTS_NEW,
+            k=36
+        )
+
+        random_board = [[random_gems[x * 5 + y] for x in range(6)] for y in range(6)]
+
+        birds_pos = [(x, y) for x in range(6) for y in range(6)]
+        random.shuffle(birds_pos)
+
+        random_board[birds_pos[0][0]][birds_pos[0][1]] = _Pirots_NEW.RED_BIRD
+        random_board[birds_pos[1][0]][birds_pos[1][1]] = _Pirots_NEW.PURPLE_BIRD
+        random_board[birds_pos[2][0]][birds_pos[2][1]] = _Pirots_NEW.GREEN_BIRD
+        random_board[birds_pos[3][0]][birds_pos[3][1]] = _Pirots_NEW.BLUE_BIRD
+
+        return random_board
+
 
 # ---------- Основная логика бонусной мини-игры ----------
 class View_pirots(discord.ui.View):
@@ -146,6 +168,7 @@ class View_pirots(discord.ui.View):
     # -------- Игровая логика --------
 
     async def pirots_reset_board(self) -> None:
+        #new_board = _Pirots_NEW.get_random_board()
         """Создаёт новое поле и расставляет птиц и самоцветы."""
         n_rows = len(self.pirots_reels)
         n_cols = len(self.pirots_reels[0])
