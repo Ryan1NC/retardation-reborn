@@ -15,8 +15,8 @@ _REEL_EMOJIS: tuple = (
 _PIROTS_NEW_EMOJIS: tuple = (
     "<:High1:1410726957259161793>", "<:High2:1408765844296826990>", "<:High3:1410726975454056488>", "<:High4:1410726991644065842>", ":red_circle:",
     ":purple_circle:", ":green_circle:", ":blue_circle:", ":red_circle:",
-    ":purple_circle:", ":green_circle:", ":blue_circle:", ":black_large_square:", ":grey_exclamation:", ":exclamation:", ":bangbang:",
-    ":grey_exclamation:", ":exclamation:", ":bangbang:"
+    ":purple_circle:", ":green_circle:", ":blue_circle:", ":black_large_square:", ":one:", ":two:", ":three:",
+    ":one:", ":two:", ":three:"
 )
 
 class _Reel(Enum):
@@ -117,7 +117,7 @@ class View_pirots(discord.ui.View):
         # флаги состояний
         self.is_bonus = False
         self.is_coin_game = False
-        self.is_spinning = False
+        self.is_spinning = True
 
         # сохранённые бонусы (если были)
         self.saved_bonus_spins = 0
@@ -137,7 +137,10 @@ class View_pirots(discord.ui.View):
         s += "\n|  **Множители птиц**  |\n"
         s += f"|       <:High1:1410726957259161793>** {self.red_lvl}**      <:High2:1408765844296826990>** {self.purple_lvl}**        |\n"
         s += f"|       <:High3:1410726975454056488>** {self.green_lvl}**      <:High4:1410726991644065842>** {self.blue_lvl}**        |\n"
-        s += f"\n**Навар: +{int(winnings)} :coin:**"
+        if self.is_spinning:
+            s += f"\n**Навар: +{int(winnings)} :coin:**"
+        else:
+            s += f"\n**Игра закончена. Вы наварились на {int(winnings)} :coin:**"
         return s
 
     # -------- Игровая логика --------
@@ -280,6 +283,9 @@ class View_pirots(discord.ui.View):
 
             # рекурсивно продолжаем, пока птицы могут двигаться
             await self.pirots_move_birds()
+        else:
+            self.is_spinning = False
+            await self.msg.edit(content=str(self), view=self)  #сообщение о конце
 
     def pirots_map_gem_cluster(
             self,
@@ -348,10 +354,9 @@ class View_pirots(discord.ui.View):
 
     async def set_msg_and_spin(self, msg: discord.Message) -> None:
         """Привязывает сообщение и запускает игровой цикл."""
-        self.is_spinning = True
+        #self.is_spinning = True
         self.msg = msg
         await self.spin()
-        self.is_spinning = False
 
     async def spin(self) -> None:
         """Основной запуск одной игровой сессии."""
