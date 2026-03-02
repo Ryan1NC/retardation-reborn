@@ -52,7 +52,7 @@ class BotVariables:
             self.setting_own_message_memory,
             self.banned_automsg_channels,
             self.user_interaction_tokens.copy(),
-            self.upgrades.upgrades[2].levels.copy()
+            self.upgrades.upgrades[0].levels.copy()
         )
     
     @classmethod
