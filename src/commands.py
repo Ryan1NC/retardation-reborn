@@ -37,7 +37,7 @@ async def prompt(message: Message) -> None:
         msg_len: int = len(bot_msg.content)
         response_len: int = msg_len
 
-        for chunk in ai.stream_response(bot_vars.ai_key, prompt, model, max_response_len):
+        async for chunk in ai.stream_response(bot_vars.ai_key, prompt, model, max_response_len):
             if chunk is None:
                 break
 
