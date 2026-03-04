@@ -179,6 +179,11 @@ async def on_message(message: discord.Message):
                                               '<:High3:1410726975454056488>', '<:High4:1410726991644065842>', \
                                                '<:Pride:1380228659658493972> '], 1, p = [0.2475, 0.2475, 0.2475, 0.2475, 0.01])[0])
 
+        case ";summon-pig" | ";summon" | "вызвать":
+            if message.content.lower().startswith(
+                    (";summon-pig", ";summon pig", "вызвать свинью")):  # This is so scuffed, I'm sorry
+                await commands.summon_pig(message)
+
         case ";tax":
             if bot_vars.user_interaction_tokens[message.author.id][0] > 0:
                 bot_vars.user_interaction_tokens[message.author.id][0] -= 100

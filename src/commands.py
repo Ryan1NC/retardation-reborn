@@ -1,4 +1,4 @@
-from discord import Member, Message, TextChannel, Reaction
+from discord import Member, Message, TextChannel, Reaction, Embed
 from discord.errors import NotFound
 
 import logging
@@ -427,6 +427,24 @@ async def translate(message: Message) -> None:
             case 500:
                 await message.reply(":question: ошибка переводчика")
                 LOGGER.error(f"Error while trying to translate a message ({message.content}): {response_json['error']}")
+
+
+async def summon_pig(message: Message) -> None:
+    async with message.channel.typing():
+        PIGS: list[str] = [
+            "https://media.discordapp.net/attachments/1364675345722380380/1364675453264334969/domestic-pig-vertebrate-mammal-suidae-pigs-ear-snout-nose-livestock-terrestrial-animal-grass-fawn-ear-1622281-414289180.jpg?ex=68131a4e&is=6811c8ce&hm=279c5fb84d77678704c9c690f72c72835221eee91b588f54adfb5299e4736be3&=&format=webp&width=1021&height=679",
+            "https://cdn.discordapp.com/attachments/305699301135351808/1367072336154464257/115621-Inga.jpg?ex=681340d3&is=6811ef53&hm=398de6f759e74e90c01da08e1fcf53605214d11270c9470ccb4ab54ac4a96836&",
+            "https://cdn.discordapp.com/attachments/305699301135351808/1367072510335651880/Domestic_pig_-_Miniature_Pig.jpg?ex=681340fd&is=6811ef7d&hm=67ded954f8c9fd42159ba36d63b19185e5786977ab68a274eea867953595749b&",
+            "https://cdn.discordapp.com/attachments/305699301135351808/1367072826976108554/49388993291_7f098f90fb_k-113260129.jpg?ex=68134148&is=6811efc8&hm=d234b7c683638cd508906aaaec4e671560457582d9b8afdc72fd040b89020659&",
+            "https://cdn.discordapp.com/attachments/305699301135351808/1367082428136685668/pig-fat-muzzle-funny-wallpaper.jpg?ex=68134a3a&is=6811f8ba&hm=3f7cf7a9f461ea8d139048e96899fa2094c9d232714b8d6ee1e338bcb3f7e2d7&",
+            "https://cdn.discordapp.com/attachments/305699301135351808/1367082519824039956/Red-Wattle-Hog-Facts1.jpg?ex=68134a4f&is=6811f8cf&hm=06354a736fedb904468a3b0335032e571b18ab82c783dd43e7e721d62d57d9b7&",
+            "https://cdn.discordapp.com/attachments/1134466669260050474/1260892645744578640/Untitled.png?ex=683acdc8&is=68397c48&hm=8bf64924d80b7d77310531dde4a85e9cac1ecc526ea4d7946a9ba2eba42d2466&"
+        ]
+
+        pig: str = random.choice(PIGS)
+        pig_embed: Embed = Embed(type="image", description="✅ свинья вызвана").set_image(url=pig)
+
+        await message.channel.send(embed=pig_embed)
 
 
 async def help(message: Message) -> None:
