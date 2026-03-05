@@ -4,6 +4,8 @@ import discord
 import asyncio
 from enum import Enum
 import random
+from collections import deque
+from math import inf
 
 _REEL_EMOJIS: tuple = (
     ":skull:", "<:proverka:1307010119824965723>", ":cherries:", ":mushroom:",
@@ -20,7 +22,7 @@ _PIROTS_NEW_EMOJIS: tuple = (
     ":purple_circle:", ":green_circle:", ":blue_circle:", ":black_large_square:", ":one:", ":two:", ":three:",
     ":one:", ":two:", ":three:",
     ":negative_squared_cross_mark:", ":sparkle:", ":eight_spoked_asterisk:",
-    ":negative_squared_cross_mark:", ":sparkle:", ":eight_spoked_asterisk:"
+    ":negative_squared_cross_mark:", ":sparkle:", ":eight_spoked_asterisk:", ":bomb:", ":bomb:", ":8ball:"
 )
 
 class _Reel(Enum):
@@ -81,6 +83,12 @@ class _Pirots_NEW(Enum):
     UN_UPGRADE_LV_1_CLAIMED = 23
     UN_UPGRADE_LV_2_CLAIMED = 24
     UN_UPGRADE_LV_3_CLAIMED = 25
+    #Бомба
+    BOMB = 26
+    #Бомба, которую возьмут
+    BOMB_CLAIMED = 27
+    #Активированная бомба
+    BOMB_ACTIVATED = 28
 
     def to_emoji(self) -> str:
         """Возвращает визуальный символ."""
@@ -141,6 +149,10 @@ class View_pirots(discord.ui.View):
 
         # игровое поле (пока пустое)
         self.pirots_reels = [[_Reel.SPINNING for _ in range(cols)] for _ in range(rows)]
+
+        #бомбы
+        self.bomb_count: int = 0
+        self.bomb_activated: bool = False
 
         # показатели выигрыша
         self.winnings = 0.0
@@ -211,12 +223,194 @@ class View_pirots(discord.ui.View):
             for r in range(n_rows):
                 self.pirots_reels[r][c] = new_board[r][c]
 
-    async def pirots_move_birds(self) -> None:
-        """Основной цикл движения птиц и 'поедания' самоцветов."""
-        moved: bool = False
+    def expand_board(self, bomb_pos):
+
+        r0, c0 = bomb_pos
         n_rows = len(self.pirots_reels)
         n_cols = len(self.pirots_reels[0])
 
+        if n_rows >= 8 and n_cols >= 8:
+            return
+
+        birds_respawn = {
+            _Pirots_NEW.RED_BIRD: False,
+            _Pirots_NEW.PURPLE_BIRD: False,
+            _Pirots_NEW.GREEN_BIRD: False,
+            _Pirots_NEW.BLUE_BIRD: False
+        }
+
+        # --- ВЗРЫВ ---
+        for dr in range(-1, 2):
+            for dc in range(-1, 2):
+
+                nr = r0 + dr
+                nc = c0 + dc
+
+                if 0 <= nr < n_rows and 0 <= nc < n_cols:
+
+                    cell = self.pirots_reels[nr][nc]
+
+                    if cell in birds_respawn:
+                        birds_respawn[cell] = True
+
+                    self.pirots_reels[nr][nc] = _Pirots_NEW.EMPTY
+
+        # --- РАСШИРЕНИЕ ---
+        if n_rows < 8 and n_cols < 8:
+
+            new_rows = n_rows + 1
+            new_cols = n_cols + 1
+
+            new_board = [[_Pirots_NEW.EMPTY for _ in range(new_cols)] for _ in range(new_rows)]
+
+            for r in range(n_rows):
+                for c in range(n_cols):
+                    new_board[r][c] = self.pirots_reels[r][c]
+
+            self.pirots_reels = new_board
+            n_rows, n_cols = new_rows, new_cols
+
+        # --- ГРАВИТАЦИЯ ---
+        self.pirots_move_empty_cells_up()
+
+        # --- ЗАПОЛНЕНИЕ ---
+        for r in range(n_rows):
+            for c in range(n_cols):
+                if self.pirots_reels[r][c] == _Pirots_NEW.EMPTY:
+                    self.pirots_reels[r][c] = _Pirots_NEW.get_random_gem()
+
+        # --- РЕСПАВН ПТИЦ ---
+        for bird, destroyed in birds_respawn.items():
+
+            if destroyed:
+
+                empty = [
+                    (r, c)
+                    for r in range(n_rows)
+                    for c in range(n_cols)
+                    if self.pirots_reels[r][c] == _Pirots_NEW.EMPTY
+                ]
+
+                if empty:
+                    r, c = random.choice(empty)
+                    self.pirots_reels[r][c] = bird
+
+
+    def bfs_distance(self, reels, start, goal):
+        """Возвращает длину кратчайшего пути между двумя клетками на сетке."""
+        if start == goal:
+            return 0
+        n_rows, n_cols = len(reels), len(reels[0])
+        q = deque([(start, 0)])
+        visited = {start}
+        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+        while q:
+            (r, c), dist = q.popleft()
+            for dr, dc in directions:
+                nr, nc = r + dr, c + dc
+            if 0 <= nr < n_rows and 0 <= nc < n_cols and (nr, nc) not in visited:
+                visited.add((nr, nc))
+            if (nr, nc) == goal:
+                return dist + 1
+            # если нужно — можно добавить проверку про “непроходимые клетки”
+            q.append(((nr, nc), dist + 1))
+        return inf
+
+    def bfs_path(self, reels, start, goal, allowed=None):
+        """
+        Возвращает маршрут от start до goal по разрешённым клеткам.
+        Если путь не найден, возвращает [start].
+        allowed: множество координат, по которым можно ходить (например, кластер)
+        """
+        if start == goal:
+            return [start]
+
+        n_rows, n_cols = len(reels), len(reels[0])
+        q = deque([start])
+        came_from = {start: None}
+        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+
+        while q:
+            cur = q.popleft()
+            if cur == goal:
+                break
+            r, c = cur
+            for dr, dc in directions:
+                nr, nc = r + dr, c + dc
+                if 0 <= nr < n_rows and 0 <= nc < n_cols:
+                    nxt = (nr, nc)
+                    # если разрешено двигаться по allowed (например, кластер)
+                    if allowed and nxt not in allowed and nxt != goal:
+                        continue
+                    if nxt not in came_from:
+                        came_from[nxt] = cur
+                        q.append(nxt)
+
+        # если цель не достигнута — выходим
+        if goal not in came_from:
+            return [start]
+
+        # восстанавливаем путь
+        path = []
+        cur = goal
+        while cur is not None:
+            path.append(cur)
+            cur = came_from.get(cur)
+        return path[::-1]
+
+    def greedy_pathfinding(self, cluster, reels, start_pos, bird_cell, mults, base_reward=0.1, discount = 0.9):
+        path = [start_pos]
+        remaining = set(cluster)-{start_pos}
+        current_pos = start_pos
+        lvl = mults[bird_cell.name.lower().replace("_bird", "")]
+        reward_map = {
+            _Pirots_NEW.UPGRADE_LV_1_CLAIMED: 1.5,
+            _Pirots_NEW.UPGRADE_LV_2_CLAIMED: 2.5,
+            _Pirots_NEW.UPGRADE_LV_3_CLAIMED: 3.5,
+            _Pirots_NEW.UN_UPGRADE_LV_1_CLAIMED: 1.0,
+            _Pirots_NEW.UN_UPGRADE_LV_2_CLAIMED: 2.0,
+            _Pirots_NEW.UN_UPGRADE_LV_3_CLAIMED: 3.0
+        }
+
+        while remaining:
+            best_cell = None
+            best_score = -float("inf")
+            for (r, c) in remaining:
+                dist = abs(r - current_pos[0]) + abs(c - current_pos[1])
+                cell = reels[r][c]
+                if cell in reward_map:
+                    value = reward_map[cell]*10
+                elif cell.value <= 13:
+                    value = base_reward * lvl
+                else:
+                    value = 0.1
+
+                score = value * (discount ** dist)
+                if score > best_score:
+                    best_score = score
+                    best_cell = (r, c)
+
+            if best_cell is None:
+                break
+
+            path_segment = self.bfs_path(reels, current_pos, best_cell, allowed = cluster)
+            path.extend(path_segment[1:])
+            remaining.remove(best_cell)
+            current_pos = best_cell
+
+            cell = reels[current_pos[0]][current_pos[1]]
+            if cell in reward_map:
+                lvl = min(7, lvl + int(reward_map[cell]))
+
+        return path
+
+
+    async def pirots_move_birds(self) -> None:
+        """Основной цикл движения птиц и 'поедания' самоцветов."""
+        moved: bool = False
+        bomb_pos = None
+        n_rows = len(self.pirots_reels)
+        n_cols = len(self.pirots_reels[0])
         for c in range(n_cols):
             for r in range(n_rows):
                 cell: _Pirots_NEW = self.pirots_reels[r][c]
@@ -230,7 +424,8 @@ class View_pirots(discord.ui.View):
                         _Pirots_NEW(16),
                         _Pirots_NEW(20),
                         _Pirots_NEW(21),
-                        _Pirots_NEW(22)
+                        _Pirots_NEW(22),
+                        _Pirots_NEW(26)
                     ]
 
                     cluster: list[tuple[int, int]] = self.pirots_map_gem_cluster(
@@ -238,11 +433,16 @@ class View_pirots(discord.ui.View):
                         bird_position=(r, c),
                         cluster=list()
                     )
+                    #поиск самого выгодного пути у птички
+                    cluster_path = self.greedy_pathfinding(cluster=cluster, reels = self.pirots_reels, start_pos=(r,c),
+                                                           bird_cell=cell, mults={'red': self. red_lvl, 'purple': self.purple_lvl,
+                                                                                  'blue': self.blue_lvl, 'green': self.green_lvl,},
+                                                           discount=0.9)
 
                     # Перемещаем птицу по кластеру
-                    for i in range(1, len(cluster)):
-                        gem_r, gem_c = cluster[i]
-                        prev_r, prev_c = cluster[i - 1]
+                    for i in range(1, len(cluster_path)):
+                        gem_r, gem_c = cluster_path[i]
+                        prev_r, prev_c = cluster_path[i - 1]
                         target_cell = self.pirots_reels[gem_r][gem_c]
 
                         # проверяем на множитель
@@ -251,7 +451,8 @@ class View_pirots(discord.ui.View):
                                            _Pirots_NEW.UPGRADE_LV_3_CLAIMED,
                                            _Pirots_NEW.UN_UPGRADE_LV_1_CLAIMED,
                                            _Pirots_NEW.UN_UPGRADE_LV_2_CLAIMED,
-                                           _Pirots_NEW.UN_UPGRADE_LV_3_CLAIMED):
+                                           _Pirots_NEW.UN_UPGRADE_LV_3_CLAIMED,
+                                           _Pirots_NEW.BOMB_CLAIMED):
                             # начисляем множитель, но не затираем апгрейд
                             match cell:
                                 case _Pirots_NEW.RED_BIRD:
@@ -300,6 +501,7 @@ class View_pirots(discord.ui.View):
                                 self.green_lvl += 3
                                 self.blue_lvl += 3
 
+
                             # проверки, не зашёл ли икс за лимит в 7
                             if self.red_lvl > 7:
                                 self.red_lvl = 7
@@ -314,6 +516,22 @@ class View_pirots(discord.ui.View):
                             self.pirots_reels[gem_r][gem_c] = cell
                             self.pirots_reels[prev_r][prev_c] = _Pirots_NEW.EMPTY
 
+                            '''
+                            elif target_cell == _Pirots_NEW.BOMB:
+                            self.bomb_count += 1
+                            self.bomb_activated = True
+                            self.bomb_pos = (gem_r, gem_c)
+                            print(self.bomb_pos)
+                            self.pirots_reels[gem_r][gem_c] = cell
+                            self.pirots_reels[prev_r][prev_c] = _Pirots_NEW.EMPTY
+
+                            moved = True
+
+                            await self.msg.edit(content=str(self), view=self)
+                            await asyncio.sleep(0.5)
+
+                            continue
+                            '''
                         # теперь, если это не множитель, просто двигаем птицу
                         else:
                             self.pirots_reels[gem_r][gem_c] = cell
@@ -324,7 +542,7 @@ class View_pirots(discord.ui.View):
                         # начисление выигрыша за поедание
                         #self.total_winnings += self.bet * 0.1
                         #self.pirots_winnings += self.bet * (0.1)
-                        if target_cell.value <= 13:
+                        if target_cell.value < 13 or (target_cell.value == 27 and self.bomb_count >= 2):
                             match cell:
                                 case _Pirots_NEW.RED_BIRD:
                                     self.pirots_winnings += self.bet * 0.1 * self.red_lvl
@@ -351,7 +569,21 @@ class View_pirots(discord.ui.View):
 
             # рекурсивно продолжаем, пока птицы могут двигаться
             await self.pirots_move_birds()
+
         else:
+            if self.bomb_activated and bomb_pos is not None:
+                self.expand_board(bomb_pos)
+                self.bomb_activated = False
+                self.pirots_move_empty_cells_up()
+                await self.msg.edit(content=str(self), view=self)
+                await asyncio.sleep(0.25)
+
+                self.pirots_fill_empty_cells()
+                await self.msg.edit(content=str(self), view=self)
+                await asyncio.sleep(0.25)
+
+                # рекурсивно продолжаем, пока птицы могут двигаться
+                await self.pirots_move_birds()
             self.is_spinning = False
             await self.msg.edit(content=str(self), view=self)  #сообщение о конце
 
