@@ -23,6 +23,19 @@ _PIROTS_NEW_EMOJIS: tuple = (
     ":negative_squared_cross_mark:", ":sparkle:", ":eight_spoked_asterisk:"
 )
 
+_PIROTS_WIN: list[str] = [
+    "https://media.discordapp.net/attachments/1353855676853518389/1479183692147720335/image.png",  # mega win
+    "https://media.discordapp.net/attachments/1353855676853518389/1479183895789572106/image.png",  # gold rush
+    "https://media.discordapp.net/attachments/1353855676853518389/1479184083316773126/image.png",  # epic win
+    "https://media.discordapp.net/attachments/1353855676853518389/1479184222924308551/image.png"   # super win
+]
+
+class DummyMessage:
+    async def edit(self, *args, **kwargs):
+        pass
+
+SIMULATION = True
+
 class _Reel(Enum):
     SKULL = 1
     PROVERKA = 2
@@ -160,21 +173,53 @@ class View_pirots(discord.ui.View):
         self.player_token_info[0] -= self.bet
 
 
-    def __str__(self) -> str:
-        """Возвращает визуальное представление поля."""
-        s: str = f"<@{self.player_userid}> | :coin: Ставка: `{self.bet}`\n\n"
-        for row in self.pirots_reels:
-            s += "> " + "".join(cell.to_emoji() for cell in row) + "\n"
-
+    def get_embed(self) -> discord.Embed:
+        """Возвращает Embed с текущим состоянием поля и картинкой выигрыша."""
         winnings = max(self.winnings, self.pirots_winnings)
-        s += "\n|  **Множители птиц**  |\n"
-        s += f"|       <:High1:1410726957259161793>** {self.red_lvl}**      <:High2:1408765844296826990>** {self.purple_lvl}**        |\n"
-        s += f"|       <:High3:1410726975454056488>** {self.green_lvl}**      <:High4:1410726991644065842>** {self.blue_lvl}**        |\n"
+
+        embed = discord.Embed(
+            title=f"<@{self.player_userid}> | :coin: Ставка: {self.bet}",
+            description="\n".join(
+                "> " + "".join(cell.to_emoji() for cell in row) for row in self.pirots_reels
+            )
+        )
+
+        embed.add_field(
+            name="Множители птиц",
+            value=(
+                f"<:High1:1410726957259161793> {self.red_lvl} | "
+                f"<:High2:1408765844296826990> {self.purple_lvl} | "
+                f"<:High3:1410726975454056488> {self.green_lvl} | "
+                f"<:High4:1410726991644065842> {self.blue_lvl}"
+            ),
+            inline=False
+        )
+
         if self.is_spinning:
-            s += f"\n**Навар: +{int(winnings)} :coin:**"
+            embed.add_field(name="Навар", value=f"+{int(winnings)} :coin:", inline=False)
         else:
-            s += f"\n**Игра закончена. Вы наварились на {int(winnings)} :coin:**"
-        return s
+            embed.add_field(name="Игра закончена", value=f"Вы наварились на {int(winnings)} :coin:", inline=False)
+
+
+            def get_win(winnings, bet) -> int | None:
+                ratio = winnings / bet
+                if ratio >= 50:  # mega win
+                    return 0
+                elif ratio >= 20:  # gold win
+                    return 1
+                elif ratio >= 10:  # epic win
+                    return 2
+                elif ratio >= 5:  # super win
+                    return 3
+                else:
+                    return None
+
+            win_index = get_win(winnings, self.bet)
+            if win_index is not None:
+                embed.set_image(url=_PIROTS_WIN[win_index])
+
+        return embed
+
 
     # -------- Игровая логика --------
 
@@ -206,8 +251,9 @@ class View_pirots(discord.ui.View):
         # Анимация: открываем поле по столбцам
         self.pirots_reels = [[_Pirots_NEW.EMPTY for _ in range(n_cols)] for _ in range(n_rows)]
         for c in range(n_cols):
-            await self.msg.edit(content=str(self), view=self)
-            await asyncio.sleep(0.35)
+            await self.msg.edit(embed=self.get_embed(), view=self)
+            if not SIMULATION:
+                await asyncio.sleep(0.35)
             for r in range(n_rows):
                 self.pirots_reels[r][c] = new_board[r][c]
 
@@ -336,24 +382,27 @@ class View_pirots(discord.ui.View):
                                     self.pirots_winnings += self.bet * 0.05 * self.blue_lvl
                         moved = True
 
-                        await self.msg.edit(content=str(self), view=self)
-                        await asyncio.sleep(0.2)
+                        if not SIMULATION:
+                            await self.msg.edit(embed=self.get_embed(), view=self)
+                            await asyncio.sleep(0.2)
 
         # если были движения — обновляем поле
         if moved:
             self.pirots_move_empty_cells_up()
-            await self.msg.edit(content=str(self), view=self)
-            await asyncio.sleep(0.25)
+            if not SIMULATION:
+                await self.msg.edit(embed=self.get_embed(), view=self)
+                await asyncio.sleep(0.25)
 
             self.pirots_fill_empty_cells()
-            await self.msg.edit(content=str(self), view=self)
-            await asyncio.sleep(0.25)
+            if not SIMULATION:
+                await self.msg.edit(embed=self.get_embed(), view=self)
+                await asyncio.sleep(0.25)
 
             # рекурсивно продолжаем, пока птицы могут двигаться
             await self.pirots_move_birds()
         else:
             self.is_spinning = False
-            await self.msg.edit(content=str(self), view=self)  #сообщение о конце
+            await self.msg.edit(embed=self.get_embed(), view=self) #сообщение о конце
 
     def pirots_map_gem_cluster(
             self,
@@ -433,7 +482,7 @@ class View_pirots(discord.ui.View):
         await self.pirots_reset_board()
         await asyncio.sleep(0.5)
         await self.pirots_move_birds()
-        await self.msg.edit(content=str(self), view=self)
+        await self.msg.edit(embed=self.get_embed(), view=self)
 
         # начисляем итог выигрыша
         if self.pirots_winnings > 0:
@@ -461,3 +510,46 @@ class View_pirots(discord.ui.View):
             await interaction.response.send_message(":prohibited: Недостаточно токенов!", ephemeral=True)
             self.stop()
 
+
+if __name__ == "__main__":
+    print("George Droid Slots Testing Mode Activated")
+
+    class View_Test(View_pirots):
+
+        def __init__(self, bet):
+            super().__init__(bet, 1, [10000000])
+            self.msg = DummyMessage()               # заглушка Discord сообщения
+
+    async def simulate():
+
+        n = 10000
+        bet = 10000
+        total = 0
+        wins_cnt = 0
+        winnings = []
+
+        for _ in range(n):
+
+            view = View_Test(bet)
+
+            await view.pirots_reset_board()
+            await view.pirots_move_birds()
+
+            win = view.pirots_winnings
+
+            winnings.append(win)
+            total += win
+
+            if win > bet:
+                wins_cnt += 1
+
+        winnings.sort()
+        print(
+            f"\nfor {n} games with bet {bet}:"
+            f"\naverage win: {total / n}"
+            f"\nmedian win: {winnings[n // 2]}"
+            f"\nchance to win: {wins_cnt / n * 100}%"
+        )
+
+
+    asyncio.run(simulate())
